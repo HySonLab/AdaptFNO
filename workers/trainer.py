@@ -24,6 +24,7 @@ class _BaseOperatorTrainer(ABC):
         val_dataset: Wind2dERA5,
         train_batch_size: int,
         val_batch_size: int,
+        multistep_training: bool,
         device: torch.device,
     ):
         self.optimizer: Optimizer = optimizer
@@ -32,6 +33,7 @@ class _BaseOperatorTrainer(ABC):
         self.val_dataset: Wind2dERA5 = val_dataset
         self.train_batch_size: int = train_batch_size
         self.val_batch_size: int = val_batch_size
+        self.multistep_training: bool = multistep_training
         self.device: torch.device = device
 
         self.train_dataloader = DataLoader(
@@ -74,6 +76,7 @@ class GlobalOperatorTrainer(_BaseOperatorTrainer):
         val_dataset: Wind2dERA5,
         train_batch_size: int,
         val_batch_size: int,
+        multistep_training: bool,
         device: torch.device,
     ):
         super().__init__(
@@ -81,6 +84,7 @@ class GlobalOperatorTrainer(_BaseOperatorTrainer):
             noise_level=noise_level, 
             train_dataset=train_dataset, val_dataset=val_dataset,
             train_batch_size=train_batch_size, val_batch_size=val_batch_size,
+            multistep_training=multistep_training,
             device=device,
         )
         self.global_operator: GlobalOperator = global_operator.to(device=self.device)
@@ -116,22 +120,36 @@ class GlobalOperatorTrainer(_BaseOperatorTrainer):
                 # Move to the selected device
                 batch_input: torch.Tensor = batch_input.to(device=self.device)
                 batch_groundtruth: torch.Tensor = batch_groundtruth.to(device=self.device)
-                # Forward propagation
+                # Reset gradients
                 self.optimizer.zero_grad()
-                batch_input += (
-                    torch.randn_like(input=batch_input, device=self.device) * batch_input.std() * self.noise_level
-                )
-                batch_prediction: torch.Tensor
-                batch_prediction, *_ = self.global_operator(input=batch_input)
-                # Compute loss
-                total_mse_loss: torch.Tensor = self.loss_function(input=batch_prediction, target=batch_groundtruth)
-                mean_mse_loss: torch.Tensor = total_mse_loss / batch_prediction.numel()
+                
+                # Mutil-step Training
+                prediction_steps: int = self.train_dataset.bundle_size
+                timesteps_per_prediction: int = self.train_dataset.timesteps_per_day    # operator was set such that 1 prediction = 1 day
+                # Prepare input
+                batch_input += torch.randn_like(input=batch_input, device=self.device) * batch_input.std() * self.noise_level
+                # Stepping
+                total_mse_loss = 0.
+                n_elems: int = 0
+                for step in range(prediction_steps):
+                    step_slice = slice(step * timesteps_per_prediction, (step + 1) * timesteps_per_prediction)
+                    step_groundtruth: torch.Tensor = batch_groundtruth[:, step_slice, ...]
+                    # Forward propagation
+                    batch_prediction, *_ = self.global_operator(input=batch_input)
+                    # Accumulate loss
+                    total_mse_loss += self.loss_function(input=batch_prediction, target=step_groundtruth)
+                    n_elems += batch_prediction.numel()
+                    # Prepare input for the next step
+                    full_input: torch.Tensor = torch.cat(tensors=[batch_input, batch_prediction], dim=1)
+                    batch_input = full_input[:, -batch_input.shape[1]:, ...]
+
                 # Backpropagation
+                mean_mse_loss: torch.Tensor = total_mse_loss / n_elems
                 mean_mse_loss.backward()
                 self.optimizer.step()
 
                 # Accumulate the metrics
-                train_metrics.add(total_mse=total_mse_loss.item(), n_elems=batch_prediction.numel())
+                train_metrics.add(total_mse=total_mse_loss.item(), n_elems=n_elems)
                 timer.end_batch(epoch=epoch)
                 # Log
                 mean_train_mse: float = train_metrics['total_mse'] / train_metrics['n_elems']
@@ -188,13 +206,27 @@ class GlobalOperatorTrainer(_BaseOperatorTrainer):
                 # Move to the selected device
                 batch_input: torch.Tensor = batch_input.to(device=self.device)
                 batch_groundtruth: torch.Tensor = batch_groundtruth.to(device=self.device)
-                # Forward propagation
-                batch_prediction: torch.Tensor
-                batch_prediction, *_ = self.global_operator(input=batch_input)
-                # Compute loss
-                total_mse_loss: torch.Tensor = self.loss_function(input=batch_prediction, target=batch_groundtruth)
+
+                # Mutil-step Prediction
+                prediction_steps: int = self.train_dataset.bundle_size
+                timesteps_per_prediction: int = self.train_dataset.timesteps_per_day    # operator was set such that 1 prediction = 1 day
+                # Stepping
+                total_mse_loss = 0.
+                n_elems: int = 0
+                for step in range(prediction_steps):
+                    step_slice = slice(step * timesteps_per_prediction, (step + 1) * timesteps_per_prediction)
+                    step_groundtruth: torch.Tensor = batch_groundtruth[:, step_slice, ...]
+                    # Forward propagation
+                    batch_prediction, *_ = self.global_operator(input=batch_input)
+                    # Accumulate loss
+                    total_mse_loss += self.loss_function(input=batch_prediction, target=step_groundtruth)
+                    n_elems += batch_prediction.numel()
+                    # Prepare input for the next step
+                    full_input: torch.Tensor = torch.cat(tensors=[batch_input, batch_prediction], dim=1)
+                    batch_input = full_input[:, -batch_input.shape[1]:, ...]
+                
                 # Accumulate the val_metrics
-                val_metrics.add(total_mse=total_mse_loss.item(), n_elems=batch_prediction.numel())
+                val_metrics.add(total_mse=total_mse_loss.item(), n_elems=n_elems)
 
         # Compute the aggregate metrics
         val_mse: float = val_metrics['total_mse'] / val_metrics['n_elems']

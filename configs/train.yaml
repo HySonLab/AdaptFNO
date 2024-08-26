@@ -14,14 +14,14 @@ dataset:
   val_fromdate: '20231001'
   val_todate: '20231231'
   time_resolution: 6  # in hours
-  bundle_size: 1    # in days
-  input_size: 2     # in bundles
+  bundle_size: 2    # in days
+  input_size: 1     # in bundles
 
 global_architecture:
   in_channels: 2
-  embedding_dim: 1024
-  n_layers: 6
-  block_size: 128
+  embedding_dim: 512
+  n_layers: 8
+  block_size: 64
   patch_size: [4, 4]
   dropout_rate: 0.5
   from_checkpoint: null   # set to null to train from scratch
@@ -41,5 +41,6 @@ training:
   n_epochs: 500
   patience: 50
   tolerance: 0.
+  multistep_training: true
   save_frequency: 5
 

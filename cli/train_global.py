@@ -52,6 +52,7 @@ def main(config: Dict[str, Any]) -> None:
     n_epochs: int                       = int(config['training']['n_epochs'])
     patience: int                       = int(config['training']['patience'])
     tolerance: int                      = float(config['training']['tolerance'])
+    multistep_training: bool            = bool(config['training']['multistep_training'])
     save_frequency: int                 = int(config['training']['save_frequency'])
 
     # Instatiate the training datasets
@@ -91,13 +92,22 @@ def main(config: Dict[str, Any]) -> None:
         checkpoint_loader = CheckpointLoader(checkpoint_path=from_checkpoint + f'/{pressure_level}')
         operator: GlobalOperator; optimizer: Optimizer
         operator, optimizer = checkpoint_loader.load(scope=globals())
+    
     else:
+        if multistep_training:
+            model_out_timesteps: int = train_dataset.timesteps_per_day
+        else:
+            model_out_timesteps: int = train_dataset.out_timesteps
+
         operator = GlobalOperator(
-            in_channels=in_channels, embedding_dim=embedding_dim,
-            in_timesteps=train_dataset.in_timesteps, out_timesteps=train_dataset.out_timesteps,
+            in_channels=in_channels, 
+            embedding_dim=embedding_dim,
+            in_timesteps=train_dataset.in_timesteps, 
+            out_timesteps=model_out_timesteps,
             n_layers=n_layers,
             spatial_resolution=global_resolution,
-            block_size=block_size, patch_size=patch_size,
+            block_size=block_size, 
+            patch_size=patch_size,
             dropout_rate=dropout_rate,
         )
         optimizer = Adam(params=operator.parameters(), lr=learning_rate)
@@ -108,6 +118,7 @@ def main(config: Dict[str, Any]) -> None:
         noise_level=noise_level,
         train_dataset=train_dataset, val_dataset=val_dataset,
         train_batch_size=train_batch_size, val_batch_size=val_batch_size,
+        multistep_training=multistep_training,
         device=device,
     )
     trainer.train(
