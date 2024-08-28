@@ -99,11 +99,14 @@ def main(config: Dict[str, Any]) -> None:
         local_operator, local_optimizer = local_loader.load(scope=globals())
     else:
         local_operator = LocalOperator(
-            in_channels=global_operator.in_channels, embedding_dim=global_operator.embedding_dim,
-            in_timesteps=train_dataset.in_timesteps, out_timesteps=train_dataset.out_timesteps,
+            in_channels=global_operator.in_channels, 
+            embedding_dim=global_operator.embedding_dim,
+            in_timesteps=train_dataset.in_timesteps, 
+            out_timesteps=train_dataset.out_timesteps,
             n_layers=global_operator.n_layers,
             spatial_resolution=train_dataset.local_resolution,
-            block_size=block_size, patch_size=patch_size,
+            block_size=block_size, 
+            patch_size=patch_size,
             n_attention_heads=n_attention_heads,
         )
         local_optimizer = Adam(params=local_operator.parameters(), lr=learning_rate)
