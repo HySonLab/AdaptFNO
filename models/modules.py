@@ -74,6 +74,24 @@ class DropPath(nn.Module):
         return output
 
 
+class FeatureMapping(nn.Module):
+    """
+    Implement Gaussian Fourier Feature Mapping
+    https://arxiv.org/abs/2006.10739
+    """
+    def __init__(self, scale: float, n_channels: int):
+        super().__init__()
+        self.scale: float = scale
+        self.n_channels = n_channels
+        assert n_channels % 2 == 0
+        self.mapping: torch.Tensor = torch.randn(n_channels, n_channels // 2) * scale
+
+    def forward(self, input: torch.Tensor):
+        assert input.shape[-1] == self.n_channels
+        output: torch.Tensor = torch.matmul(input=2 * torch.pi * input, other=self.mapping.to(input.device))
+        return torch.cat(tensors=[torch.sin(output), torch.cos(output)], dim=-1)
+
+
 # DONE
 class AFNOLayer(nn.Module):
 
@@ -103,6 +121,7 @@ class AFNOLayer(nn.Module):
         self.ln2 = nn.LayerNorm(normalized_shape=embedding_dim)
 
         self.mlp = nn.Sequential(
+            # FeatureMapping(scale=5., n_channels=embedding_dim),
             nn.Linear(in_features=embedding_dim, out_features=embedding_dim * 4),
             nn.GELU(),
             nn.Dropout(p=dropout_rate),
@@ -229,6 +248,7 @@ class LinearDecoder(nn.Module):
         self.dropout = nn.Dropout(p=dropout_rate)
 
         self.temporal_decoder = nn.Sequential(
+            # FeatureMapping(scale=5., n_channels=in_timesteps),
             nn.Linear(
                 in_features=in_timesteps,
                 out_features=out_timesteps,
@@ -236,9 +256,12 @@ class LinearDecoder(nn.Module):
             nn.GELU(),
             self.dropout,
         )
-        self.spatial_decoder = nn.Linear(
-            in_features=self.in_channels,
-            out_features=self.out_channels * self.patch_size[0] * self.patch_size[1],
+        self.spatial_decoder = nn.Sequential(
+            # FeatureMapping(scale=5., n_channels=in_channels),
+            nn.Linear(
+                in_features=in_channels,
+                out_features=out_channels * patch_size[0] * patch_size[1],
+            ),
         )
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:

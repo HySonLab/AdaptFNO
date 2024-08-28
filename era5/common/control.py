@@ -31,7 +31,7 @@ class DataQualityControl:
 if __name__ == '__main__':
     dataroot: str = 'data/2d/era5/wind/1000'
     self = DataQualityControl(dataroot)
-    print(f"Missing files in {dataroot}:\n{self.check_missing_files(fromdate='20180101', todate='20240731')}")
+    print(f"Missing files in {dataroot}:\n{self.check_missing_files(fromdate='20170101', todate='20240731')}")
     print('-' * 10)
     print(f"Incomplete files in {dataroot}:\n{self.check_incompleted_files()}")
 

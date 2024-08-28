@@ -9,7 +9,7 @@ dataset:
   local_latitude: [30, -10]
   local_longitude: [90, 130]
   local_resolution: [128, 128]
-  train_fromdate: '20180101'
+  train_fromdate: '20170101'
   train_todate: '20221231'
   val_fromdate: '20231001'
   val_todate: '20231231'

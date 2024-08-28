@@ -1,0 +1,14 @@
+#!/bin/bash
+
+input_file="data/2d/era5/wind/1000/src/2016_2015_2014.grib"
+
+# Get the unique dates from the file
+dates=$(cdo showdate $input_file  | tr ' ' '\n' | sort | uniq | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' | sed 's/-//g')
+
+# Loop over each date and split the file
+for date in $dates; do
+  output_file="${date}.grib"
+  echo "Writing to $output_file"
+  cdo seldate,$date $input_file $output_file
+done
+

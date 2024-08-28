@@ -148,10 +148,7 @@ class Wind2dERA5(Dataset):
             input=data, size=spatial_resolution, mode='bicubic',
         )
         # Retrieve timestamps
-        timestamps: List[dt.datetime] = [
-            dt.datetime.fromtimestamp(t.astype('datetime64[s]').astype(int)) 
-            for t in dataset.valid_time.values
-        ]
+        timestamps: List[dt.datetime] = [t.astype('M8[s]').astype(dt.datetime) for t in dataset.valid_time.values]
         assert data.shape[0] == len(timestamps)
         return data, timestamps
 
@@ -162,30 +159,32 @@ if __name__ == '__main__':
     dataset = Wind2dERA5(
         dataroot='data/2d/era5/wind',
         pressure_level=1000,
-        fromdate='20240701',
-        todate='20240731',
+        fromdate='20170101',
+        todate='20171231',
         global_latitude=(45, -45),
         global_longitude=(0, 180),
         global_resolution=(128, 128),
         local_latitude=None,
         local_longitude=None,
         local_resolution=None,
-        time_resolution=6,
-        bundle_size=3,
+        time_resolution=3,
+        bundle_size=1,
         input_size=1,
     )
 
     from torch.utils.data import DataLoader
 
-    dataloader = DataLoader(dataset, batch_size=1, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=1, num_workers=1, shuffle=False)
     for batch, (input, output) in enumerate(dataloader, start=0):
-        print(f'Load batch {batch}/{len(dataloader)}')
+        print(f'Load batch {batch + 1}/{len(dataloader)}')
         print(input.shape)
         print(output.shape)
-        print(dataset.compute_timestamp(bundle_idx=batch))
         print('--------')
 
-    print(len(dataset))
+    print(dataset.compute_timestamp(bundle_idx=0)[0])
+    print(dataset.compute_timestamp(bundle_idx=0)[1])
+
+    print('Len of dataset:', len(dataset))
 
 
 
